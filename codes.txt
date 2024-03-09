@@ -1,0 +1,301 @@
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////// ΕΡΩΤΗΜΑ 1 ///////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+i) 
+
+SELECT DATE_TRUNC('day', t) AS day, COUNT(*) AS count
+FROM positions
+GROUP BY day
+ORDER BY count DESC;
+-------------------------------------------------
+ii) 
+
+SELECT 
+    vesseltypes.description, COUNT(*) AS number_of_ships, vessels.flag
+FROM 
+    vessels
+JOIN 
+    vesseltypes ON vessels.type = vesseltypes.code AND vessels.flag = 'Greece'
+GROUP BY 
+    vesseltypes.description, vessels.flag;
+----------------------------------------------------
+iii) 
+
+SELECT positions.vessel_id, vesseltypes.description, COUNT(*) AS number_of_ships_based_on_type
+FROM positions, vessels
+JOIN vesseltypes ON vessels.type = vesseltypes.code
+WHERE positions.speed > 30 AND vessels.id = positions.vessel_id
+GROUP BY positions.vessel_id, vesseltypes.description;
+----------------------------------------------------
+iv)
+
+SELECT
+    positions.vessel_id, date_trunc('day', t) AS day, COUNT(*) AS number_of_positions
+FROM
+    positions, vesseltypes
+WHERE
+    vesseltypes.description LIKE 'Passenger%' AND positions.t BETWEEN '2019-08-14' AND '2019-08-19'
+    /* an balw to orio stis 18/08 pairnei ta stoixeia ews kai tis 17/08 */
+GROUP BY
+    positions.vessel_id, day
+ORDER BY
+    positions.vessel_id, day;
+-------------------------------------------------------
+v)
+
+5.1 
+SELECT positions.vessel_id, positions.speed
+FROM positions,  vesseltypes
+WHERE positions.t BETWEEN '2019-08-15' AND '2019-08-19' AND positions.speed = 0 AND vesseltypes.description LIKE 'Cargo%'
+GROUP BY positions.vessel_id, positions.speed
+ORDER BY positions.vessel_id;
+
+5.2
+WITH cte_example AS (
+    SELECT positions.vessel_id, vesseltypes.description, positions.speed
+    FROM positions
+    JOIN vessels ON positions.vessel_id = vessels.id
+    JOIN vesseltypes ON vessels.type = vesseltypes.code
+    WHERE DATE(positions.t) BETWEEN '2019-08-12' AND '2019-08-19'
+      AND vesseltypes.description LIKE 'Cargo%'
+    GROUP BY positions.vessel_id, vesseltypes.description, positions.speed
+    HAVING COUNT(DISTINCT DATE(positions.t)) = 8
+    ORDER BY positions.vessel_id
+)
+SELECT *
+FROM cte_example
+WHERE speed = 0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////// ΕΡΩΤΗΜΑ 4 ///////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+i)
+CREATE INDEX IF NOT EXISTS idx_positions_t ON Positions(t);
+
+SELECT DATE_TRUNC('day', t) AS day, COUNT(*) AS count
+FROM Positions
+GROUP BY day
+ORDER BY count DESC;
+
+ii)
+CREATE INDEX IF NOT EXISTS idx_flag ON vessels USING HASH (flag);
+
+SELECT 
+    vesseltypes.description, COUNT(*) AS number_of_ships, vessels.flag
+FROM 
+    vessels
+JOIN 
+    vesseltypes ON vessels.type = vesseltypes.code
+WHERE 
+    vessels.flag = 'Greece'
+GROUP BY 
+    vesseltypes.description, vessels.flag;
+
+iii)
+CREATE INDEX IF NOT EXISTS idx_positions_speed ON positions(speed);
+CREATE INDEX IF NOT EXISTS idx_vessels_id ON vessels(type);
+
+SELECT positions.vessel_id, vesseltypes.description, COUNT(*) AS number_of_ships_based_on_type
+FROM positions, vessels
+JOIN vesseltypes ON vessels.type = vesseltypes.code
+WHERE positions.speed > 30 AND vessels.id = positions.vessel_id
+GROUP BY positions.vessel_id, vesseltypes.description;
+
+iv)
+
+CREATE INDEX IF NOT EXISTS idx_positions_day ON positions (DATE_TRUNC('day', t));
+
+SELECT
+    positions.vessel_id, DATE_TRUNC('day', t) AS day, COUNT(*) AS number_of_positions
+FROM
+    positions, vesseltypes
+WHERE
+    vesseltypes.description LIKE 'Passenger%' AND positions.t BETWEEN '2019-08-14' AND '2019-08-19'
+GROUP BY
+    positions.vessel_id, day
+ORDER BY
+    positions.vessel_id, day;
+
+v)
+5.1
+CREATE INDEX IF NOT EXISTS idx_time_speed ON positions (t, speed);
+CREATE INDEX IF NOT EXISTS idx_type ON vessels (type);
+
+SELECT positions.vessel_id, positions.speed
+FROM positions,  vesseltypes
+WHERE positions.t BETWEEN '2019-08-15' AND '2019-08-19' AND positions.speed = 0 AND vesseltypes.description LIKE 'Cargo%'
+GROUP BY positions.vessel_id, positions.speed
+ORDER BY positions.vessel_id;
+
+5.2
+CREATE INDEX IF NOT EXISTS idx_positions_t ON positions(t);
+CREATE INDEX IF NOT EXISTS idx_vessel_type ON vessels(type);
+
+WITH cte_example AS (
+    SELECT positions.vessel_id, vesseltypes.description, positions.speed
+    FROM positions
+    JOIN vessels ON positions.vessel_id = vessels.id
+    JOIN vesseltypes ON vessels.type = vesseltypes.code
+    WHERE DATE(positions.t) BETWEEN '2019-08-12' AND '2019-08-19'
+      AND vesseltypes.description LIKE 'Cargo%'
+    GROUP BY positions.vessel_id, vesseltypes.description, positions.speed
+    HAVING COUNT(DISTINCT DATE(positions.t)) = 8
+    ORDER BY positions.vessel_id
+)
+SELECT *
+FROM cte_example
+WHERE speed = 0;
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////// ΕΡΩΤΗΜΑ 5 ///////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ii)
+
+CREATE TABLE vessels_partitioned(
+    CHECK (flag = 'Greece%')
+)INHERITS (vessels);
+
+CREATE INDEX idx_vessels_partitioned_description ON vessels_partitioned(flag);
+
+-----------INSERT DATA------------------
+
+INSERT INTO vessels_partitioned (id, type, flag)
+SELECT id, type, flag
+FROM vessels
+WHERE flag = 'Greece';
+
+-----------EXECUTE THIS----------------------
+SELECT 
+    vesseltypes.description, COUNT(*) AS number_of_ships, vessels_partitioned.flag
+FROM 
+    vessels_partitioned
+JOIN 
+    vesseltypes ON vessels_partitioned.type = vesseltypes.code
+WHERE 
+    vessels_partitioned.flag = 'Greece'
+GROUP BY 
+    vesseltypes.description, vessels_partitioned.flag;
+
+-----------------------------------------------------------
+iii)
+
+CREATE TABLE positions_partitioned_speed_high(
+    CHECK (speed > 30)
+)INHERITS (positions);
+
+-----------INSERT DATA------------------
+
+INSERT INTO positions_partitioned_speed_high (id, vessel_id, t, lon, lat, heading, course ,speed)
+SELECT id, vessel_id, t, lon, lat, heading, course ,speed
+FROM positions
+WHERE speed > 30;
+
+-----------EXECUTE THIS----------------------
+
+SELECT positions_partitioned_speed_high.vessel_id, vesseltypes.description, COUNT(*) AS number_of_ships_based_on_type
+FROM positions_partitioned_speed_high, vessels
+JOIN vesseltypes ON vessels.type = vesseltypes.code
+WHERE positions_partitioned_speed_high.speed > 30 AND vessels.id = positions_partitioned_speed_high.vessel_id
+GROUP BY positions_partitioned_speed_high.vessel_id, vesseltypes.description;
+
+--------------------------------------------------------------
+iv)
+
+CREATE TABLE Vesseltypes_partitioned (
+    CHECK (description LIKE 'Passenger%')
+) INHERITS (vesseltypes);
+
+CREATE TABLE Positions_partitioned (
+    CHECK (t > '2019-08-14' AND t < '2019-08-19')
+) INHERITS (positions);
+
+CREATE INDEX idx_vesseltypes_partitioned_description ON Vesseltypes_partitioned(description);
+CREATE INDEX idx_positions_partitioned_t ON Positions_partitioned(t);
+
+-----------INSERT DATA------------------
+
+INSERT INTO vesseltypes_partitioned (code, description)
+SELECT code, description
+FROM vesseltypes
+WHERE description LIKE 'Passenger%';
+
+INSERT INTO positions_partitioned (id, vessel_id, t, lon, lat, heading, course, speed)
+SELECT id, vessel_id, t, lon, lat, heading, course, speed
+FROM positions
+WHERE t > '2019-08-14' AND t < '2019-08-19';
+
+-----------EXECUTE THIS----------------------
+
+SELECT
+    positions_partitioned.vessel_id, DATE_TRUNC('day', t) AS day, COUNT(*) AS number_of_positions
+FROM
+    positions_partitioned, vesseltypes_partitioned
+WHERE
+    vesseltypes_partitioned.description LIKE 'Passenger%' AND positions_partitioned.t BETWEEN '2019-08-14' AND '2019-08-19'
+GROUP BY
+    positions_partitioned.vessel_id, day
+ORDER BY
+    positions_partitioned.vessel_id, day;
+
+-------------------------------------------------------------
+v)
+
+CREATE TABLE Positions_partitioned_2(
+    CHECK (t > '2019-08-15' AND t < '2019-08-19'),
+    CHECK (speed = 0)
+) INHERITS (positions);
+
+CREATE TABLE Vesseltypes_partitioned_2(
+    CHECK (description LIKE 'Cargo%')
+) INHERITS (vesseltypes);
+
+CREATE INDEX idx_positions_partitioned_t_speed2 ON Positions_partitioned_2(t, speed);
+CREATE INDEX idx_vesseltypes_partitioned_description2 ON Vesseltypes_partitioned_2(description);
+
+-----------------INSERT DATA----------------------------
+
+INSERT INTO Positions_partitioned_2 (id, vessel_id, t, lon, lat, heading, course, speed)
+SELECT id, vessel_id, t, lon, lat, heading, course, speed
+FROM positions
+WHERE t > '2019-08-15' AND t < '2019-08-19' AND speed = 0;
+
+INSERT INTO Vesseltypes_partitioned_2 (code, description)
+SELECT code, description
+FROM vesseltypes
+WHERE description LIKE 'Cargo%';
+
+-----------EXECUTE THIS 5.1----------------------
+
+SELECT positions_partitioned_2.vessel_id, positions_partitioned_2.speed
+FROM positions_partitioned_2,  vesseltypes_partitioned_2
+WHERE positions_partitioned_2.t BETWEEN '2019-08-15' AND '2019-08-19' AND positions_partitioned_2.speed = 0 AND  vesseltypes_partitioned_2.description LIKE 'Cargo%'
+GROUP BY positions_partitioned_2.vessel_id,  positions_partitioned_2.speed
+ORDER BY positions_partitioned_2.vessel_id;
+
+-----------EXECUTE THIS 5.2----------------------
+WITH cte_example AS (
+    SELECT positions_partitioned_2.vessel_id, vesseltypes_partitioned_2.description, positions_partitioned_2.speed
+    FROM positions_partitioned_2
+    JOIN vessels ON positions_partitioned_2.vessel_id = vessels.id
+    JOIN vesseltypes_partitioned_2 ON vessels.type = vesseltypes_partitioned_2.code
+    WHERE DATE(positions_partitioned_2.t) BETWEEN '2019-08-12' AND '2019-08-19'
+      AND vesseltypes_partitioned_2.description LIKE 'Cargo%'
+    GROUP BY positions_partitioned_2.vessel_id, vesseltypes_partitioned_2.description, positions_partitioned_2.speed
+    HAVING COUNT(DISTINCT DATE(positions_partitioned_2.t)) = 8
+    ORDER BY positions_partitioned_2.vessel_id
+)
+SELECT *
+FROM cte_example
+WHERE speed = 0;
