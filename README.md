@@ -4,11 +4,11 @@
 
 The project involves working with real-world ship data in PostgreSQL, loading three CSV files: 
 
-- Positions.csv (containing ship positions over time) 
+- Positions.csv (Containing ship positions over time. Longitude, latitude, speed, etc.) 
 
-- Vessels.csv (static ship details like type and flag)
+- Vessels.csv (Static ship details like type and flag)
 
-- VesselTypes.csv (describing ship types)
+- VesselTypes.csv (Describing ship types)
 
 
 The task involves answering **_five key questions_**: querying the data, tuning performance using buffers and parallelism, creating indexes to speed up queries, and partitioning the dataset. 
